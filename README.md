@@ -22,139 +22,128 @@ Hệ thống chatbot hỗ trợ tư vấn tuyển sinh, cho phép:
 ## Cấu trúc project
 
 ```bash
-uit-admission-chatbot/
+uit-admission-rag/
 │
-├── frontend/                          # giao diện người dùng
-│   ├── public/
-│   └── src/
-│       ├── components/
-│       │   ├── ChatBox/
-│       │   ├── MessageList/
-│       │   ├── SearchForm/
-│       │   ├── Navbar/
-│       │   └── AdminTable/
-│       ├── pages/
-│       │   ├── Home.jsx
-│       │   ├── ChatPage.jsx
-│       │   ├── LookupPage.jsx
-│       │   ├── AdminPage.jsx
-│       │   └── LoginPage.jsx
-│       ├── services/
-│       │   └── api.js
-│       ├── App.jsx
-│       └── main.jsx
-│
-├── backend/                           # server chính
-│   ├── app/
-│   │   ├── api/
-│   │   │   ├── chat.py
-│   │   │   ├── majors.py
-│   │   │   ├── tuition.py
-│   │   │   ├── admissions.py
-│   │   │   ├── cutoff.py
-│   │   │   ├── auth.py
-│   │   │   └── admin.py
-│   │   │
-│   │   ├── core/
-│   │   │   ├── config.py
-│   │   │   └── security.py
-│   │   │
-│   │   ├── models/
-│   │   │   ├── user.py
-│   │   │   ├── major.py
-│   │   │   ├── tuition.py
-│   │   │   ├── admission_method.py
-│   │   │   ├── subject_combination.py
-│   │   │   ├── cutoff_score.py
-│   │   │   └── chat_history.py
-│   │   │
-│   │   ├── schemas/
-│   │   │   ├── chat.py
-│   │   │   ├── major.py
-│   │   │   ├── tuition.py
-│   │   │   ├── admission.py
-│   │   │   └── auth.py
-│   │   │
-│   │   ├── services/
-│   │   │   ├── chat_service.py
-│   │   │   ├── major_service.py
-│   │   │   ├── tuition_service.py
-│   │   │   ├── admission_service.py
-│   │   │   ├── cutoff_service.py
-│   │   │   └── history_service.py
-│   │   │
-│   │   ├── db/
-│   │   │   ├── session.py
-│   │   │   ├── base.py
-│   │   │   └── seed.py
-│   │   │
-│   │   └── main.py
+├── app/                               # code chính backend
+│   ├── api/                           # FastAPI / Flask endpoints
+│   │   ├── chat.py                    # /chat
+│   │   ├── ingest.py                  # /admin/ingest
+│   │   ├── reindex.py                 # /admin/reindex
+│   │   ├── documents.py               # list docs, delete doc, status
+│   │   └── health.py
 │   │
-│   ├── requirements.txt
-│   └── Dockerfile
-│
-├── rag/                               # module RAG tách riêng
-│   ├── data/
-│   │   ├── raw/
-│   │   ├── processed/
-│   │   └── chunks/
+│   ├── core/
+│   │   ├── config.py                  # đọc env, settings
+│   │   ├── logging.py                 # logger
+│   │   ├── constants.py               # tên folder, ext hỗ trợ
+│   │   └── prompts.py                 # system prompt, citation prompt
 │   │
-│   ├── loaders/
+│   ├── loaders/                       # đọc dữ liệu đầu vào
+│   │   ├── base_loader.py
 │   │   ├── pdf_loader.py
-│   │   └── web_loader.py
+│   │   ├── txt_loader.py
+│   │   ├── html_loader.py
+│   │   └── loader_router.py           # tự chọn loader theo extension
 │   │
-│   ├── preprocessing/
-│   │   ├── clean_text.py
-│   │   └── split_sections.py
+│   ├── preprocess/
+│   │   ├── clean_text.py              # bỏ ký tự rác, normalize space
+│   │   ├── metadata_extractor.py      # title, year, page, source_type...
+│   │   ├── deduplicate.py             # loại bản trùng
+│   │   └── normalize_document.py      # chuẩn hóa về 1 schema chung
 │   │
 │   ├── chunking/
-│   │   └── chunker.py
+│   │   ├── chunker.py                 # chia chunk chính
+│   │   ├── heading_splitter.py        # chia theo tiêu đề trước
+│   │   └── chunk_validator.py         # kiểm tra chunk quá ngắn/dài
 │   │
-│   ├── embedding/
-│   │   └── embedder.py
+│   ├── embeddings/
+│   │   ├── embedding_factory.py       # chọn model embedding
+│   │   └── embed_documents.py
 │   │
-│   ├── vectorstore/
-│   │   └── vectordb.py
+│   ├── vectorstores/
+│   │   ├── faiss_store.py
+│   │   ├── chroma_store.py            # để sẵn nếu sau này đổi
+│   │   └── store_factory.py
 │   │
 │   ├── retrieval/
-│   │   └── retriever.py
+│   │   ├── retriever.py               # similarity search
+│   │   ├── filters.py                 # lọc theo year/type/program
+│   │   ├── reranker.py                # optional
+│   │   └── hybrid_retriever.py        # optional về sau
 │   │
-│   ├── generation/
-│   │   └── generator.py
+│   ├── chains/
+│   │   ├── rag_chain.py               # chain hỏi đáp chính
+│   │   ├── answer_formatter.py        # format answer + nguồn
+│   │   └── citation_builder.py        # gom page/source cho output
 │   │
-│   ├── pipeline/
-│   │   ├── ingest_pipeline.py
-│   │   └── chat_pipeline.py
+│   ├── services/
+│   │   ├── ingest_service.py
+│   │   ├── reindex_service.py
+│   │   ├── query_service.py
+│   │   └── document_service.py
 │   │
-│   └── scripts/
-│       ├── ingest_docs.py
-│       └── build_index.py
+│   ├── schemas/
+│   │   ├── chat.py                    # request/response models
+│   │   ├── document.py
+│   │   └── admin.py
+│   │
+│   └── utils/
+│       ├── file_hash.py               # hash file để detect update
+│       ├── paths.py
+│       ├── timers.py
+│       └── helpers.py
 │
-├── database/
-│   ├── schema.sql
-│   └── seed_data/
-│       ├── majors.csv
-│       ├── tuition.csv
-│       ├── admission_methods.csv
-│       ├── subject_combinations.csv
-│       └── cutoff_scores.csv
+├── data/
+│   ├── raw/
+│   │   ├── pdf/
+│   │   ├── txt/
+│   │   └── html/
+│   │
+│   ├── interim/
+│   │   ├── parsed/                    # text sau khi load
+│   │   ├── cleaned/                   # text sau khi làm sạch
+│   │   └── manifests/                 # metadata tổng hợp từng file
+│   │
+│   ├── processed/
+│   │   ├── chunks/                    # chunk JSONL / parquet
+│   │   ├── embeddings/                # optional cache embedding
+│   │   └── reports/                   # report ingest
+│   │
+│   └── archive/                       # file cũ / đã thay thế
 │
-├── docs/
-│   ├── SRS.md
-│   ├── usecase-diagram.png
-│   ├── usecase-specification.md
-│   ├── erd.png
-│   ├── sequence-diagram.png
-│   ├── architecture-diagram.png
-│   ├── testcases.xlsx
-│   └── project-plan.md
+├── storage/
+│   ├── vectorstore/
+│   │   ├── faiss/                     # index FAISS
+│   │   └── chroma/                    # nếu dùng Chroma
+│   │
+│   ├── docstore/                      # mapping doc_id <-> metadata
+│   └── cache/
+│
+├── scripts/
+│   ├── ingest_once.py                 # ingest 1 lần
+│   ├── reindex_all.py                 # rebuild index toàn bộ
+│   ├── sync_data.py                   # copy data từ nguồn khác
+│   ├── validate_chunks.py
+│   └── evaluate_rag.py
 │
 ├── tests/
-│   ├── backend/
-│   ├── rag/
-│   └── frontend/
+│   ├── test_loaders.py
+│   ├── test_chunking.py
+│   ├── test_retrieval.py
+│   ├── test_rag_chain.py
+│   └── test_api.py
 │
+├── notebooks/
+│   ├── inspect_pdf.ipynb
+│   ├── chunk_experiments.ipynb
+│   └── retrieval_debug.ipynb
+│
+├── frontend/                          # nếu bạn làm UI riêng
+│   ├── src/
+│   └── public/
+│
+├── .env
 ├── .env.example
-├── docker-compose.yml
+├── requirements.txt
 ├── README.md
-└── .gitignore
+└── run.py

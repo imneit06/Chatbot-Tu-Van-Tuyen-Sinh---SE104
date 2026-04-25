@@ -8,4 +8,4 @@ build/
 .env
 .DS_Store
 .ipynb_checkpoints/
-# data/processed/*
+data/*
