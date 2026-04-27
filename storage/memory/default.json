@@ -1,0 +1,36 @@
+{
+  "session_id": "default",
+  "summary": "",
+  "messages": [
+    {
+      "role": "user",
+      "content": "ngành khoa học máy tính học trong thời gian bao lâu là tốt nghiệp",
+      "created_at": "2026-04-27T03:33:08"
+    },
+    {
+      "role": "assistant",
+      "content": "Ngành Khoa học Máy tính có thời gian đào tạo là 3.5 năm (gồm 7 học kỳ chính thức) để tốt nghiệp.\n\nNguồn: data/raw/html/Cử nhân ngành Khoa học Máy tính (Áp dụng từ khóa 19 - 2024) _ Cổng thông tin đào tạo.html",
+      "created_at": "2026-04-27T03:33:08"
+    },
+    {
+      "role": "user",
+      "content": "ngành khoa học máy tính có bao nhiêu tín chỉ t?ự do",
+      "created_at": "2026-04-27T13:53:33"
+    },
+    {
+      "role": "assistant",
+      "content": "Ngành Khoa học Máy tính có tối thiểu 10 tín chỉ tự chọn tự do.\n\nNguồn: data/raw/html/Cử nhân ngành Khoa học Máy tính (Áp dụng từ khóa 19 - 2024) _ Cổng thông tin đào tạo.html",
+      "created_at": "2026-04-27T13:53:33"
+    },
+    {
+      "role": "user",
+      "content": "g?ồm nh?ững ngành nào",
+      "created_at": "2026-04-27T13:56:32"
+    },
+    {
+      "role": "assistant",
+      "content": "Ngành Khoa học Máy tính có các định hướng chuyên ngành sau:\n*   Trí tuệ nhân tạo\n*   Công nghệ tri thức\n*   Xử lý Ngôn ngữ Tự nhiên\n*   Tính toán Đa phương tiện\n*   Thị giác máy tính\n\nNguồn: data/raw/html/Cử nhân ngành Khoa học Máy tính (Áp dụng từ khóa 19 - 2024) _ Cổng thông tin đào tạo.html",
+      "created_at": "2026-04-27T13:56:32"
+    }
+  ]
+}

@@ -11,15 +11,17 @@ try:
 except Exception:
     from langchain_classic.retrievers.multi_vector import MultiVectorRetriever
 
+from app.core.config import (
+    PARENTS_PATH,
+    CHROMA_DIR,
+    CHROMA_COLLECTION_NAME,
+    EMBEDDING_MODEL_NAME,
+    EMBEDDING_DEVICE,
+    NORMALIZE_EMBEDDINGS,
+    RETRIEVAL_TOP_K,
+)
 
 ID_KEY = "doc_id"
-
-PARENTS_PATH = Path("data/processed/multivector_preview/parents.jsonl")
-CHROMA_DIR = Path("storage/chroma")
-COLLECTION_NAME = "uit_admission_multivector"
-
-EMBEDDING_MODEL_NAME = "BAAI/bge-m3"
-DEVICE = "cuda"  # Nếu lỗi GPU thì đổi thành "cpu"
 
 
 def load_parent_docstore():
@@ -49,17 +51,17 @@ def build_embeddings():
     return HuggingFaceEmbeddings(
         model_name=EMBEDDING_MODEL_NAME,
         model_kwargs={
-            "device": DEVICE,
+            "device": EMBEDDING_DEVICE,
         },
         encode_kwargs={
-            "normalize_embeddings": True,
+            "normalize_embeddings": NORMALIZE_EMBEDDINGS,
         },
     )
 
 
 def build_vectorstore():
     return Chroma(
-        collection_name=COLLECTION_NAME,
+        collection_name=CHROMA_COLLECTION_NAME,
         embedding_function=build_embeddings(),
         persist_directory=str(CHROMA_DIR),
         collection_metadata={
@@ -106,7 +108,7 @@ def route_query(question: str):
     return None
 
 
-def build_retriever(metadata_filter=None, k=5):
+def build_retriever(metadata_filter=None, k=RETRIEVAL_TOP_K):
     vectorstore = build_vectorstore()
     docstore = load_parent_docstore()
 
@@ -125,7 +127,7 @@ def build_retriever(metadata_filter=None, k=5):
     )
 
 
-def retrieve_docs(question: str, k=5):
+def retrieve_docs(question: str, k=RETRIEVAL_TOP_K):
     metadata_filter = route_query(question)
 
     retriever = build_retriever(

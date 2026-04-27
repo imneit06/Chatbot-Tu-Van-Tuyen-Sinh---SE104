@@ -12,24 +12,20 @@ try:
 except Exception:
     from langchain_classic.retrievers.multi_vector import MultiVectorRetriever
 
+from app.core.config import (
+    PARENTS_PATH,
+    CHILDREN_PATH,
+    CHROMA_DIR,
+    CHROMA_COLLECTION_NAME,
+    CHROMA_DISTANCE_METRIC,
+    EMBEDDING_MODEL_NAME,
+    EMBEDDING_DEVICE,
+    NORMALIZE_EMBEDDINGS,
+    RESET_INDEX,
+    CHROMA_BATCH_SIZE,
+)
 
 ID_KEY = "doc_id"
-
-PARENTS_PATH = Path("data/processed/multivector_preview/parents.jsonl")
-CHILDREN_PATH = Path("data/processed/multivector_preview/children.jsonl")
-
-CHROMA_DIR = Path("storage/chroma")
-COLLECTION_NAME = "uit_admission_multivector"
-
-RESET_INDEX = True
-
-EMBEDDING_MODEL_NAME = "BAAI/bge-m3"
-
-# Nếu bị out VRAM thì đổi thành "cpu"
-DEVICE = "cuda"
-
-# Chỉ dùng khi Chroma không cho add quá nhiều docs cùng lúc
-FALLBACK_CHROMA_BATCH_SIZE = 1000
 
 
 def load_parents():
@@ -84,10 +80,10 @@ def build_embeddings():
     return HuggingFaceEmbeddings(
         model_name=EMBEDDING_MODEL_NAME,
         model_kwargs={
-            "device": DEVICE,
+            "device": EMBEDDING_DEVICE,
         },
         encode_kwargs={
-            "normalize_embeddings": True,
+            "normalize_embeddings": NORMALIZE_EMBEDDINGS,
         },
     )
 
@@ -96,11 +92,11 @@ def build_vectorstore():
     embeddings = build_embeddings()
 
     vectorstore = Chroma(
-        collection_name=COLLECTION_NAME,
+        collection_name=CHROMA_COLLECTION_NAME,
         embedding_function=embeddings,
         persist_directory=str(CHROMA_DIR),
         collection_metadata={
-            "hnsw:space": "cosine",
+            "hnsw:space": CHROMA_DISTANCE_METRIC,
         },
     )
 
@@ -145,8 +141,8 @@ def add_documents_with_fallback(vectorstore, documents):
 
     total = len(documents)
 
-    for start in range(0, total, FALLBACK_CHROMA_BATCH_SIZE):
-        end = start + FALLBACK_CHROMA_BATCH_SIZE
+    for start in range(0, total, CHROMA_BATCH_SIZE):
+        end = start + CHROMA_BATCH_SIZE
         batch = documents[start:end]
 
         print(f"Đang add batch {start} → {min(end, total)} / {total}")
