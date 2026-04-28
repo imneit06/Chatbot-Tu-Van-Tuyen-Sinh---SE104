@@ -22,17 +22,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-# Node
-node_modules/
-dist/
-.vite/
-
-# Python
-__pycache__/
-*.py[cod]
-venv/
-env/
-.env
-.DS_Store
-.ipynb_checkpoints/
-data/*
