@@ -1,4 +1,4 @@
-from app.indexing.prepare_pipeline import run_prepare_multivector
+from app.indexing.pipeline import run_prepare_multivector  # pyright: ignore[reportMissingImports]
 
 if __name__ == "__main__":
     run_prepare_multivector()

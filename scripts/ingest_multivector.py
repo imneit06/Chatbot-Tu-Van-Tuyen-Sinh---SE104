@@ -2,15 +2,15 @@ from pathlib import Path
 import json
 import shutil
 
-from langchain_core.documents import Document
-from langchain_core.stores import InMemoryStore
-from langchain_chroma import Chroma
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_core.documents import Document  # pyright: ignore[reportMissingImports]
+from langchain_core.stores import InMemoryStore  # pyright: ignore[reportMissingImports]
+from langchain_chroma import Chroma  # pyright: ignore[reportMissingImports]
+from langchain_huggingface import HuggingFaceEmbeddings  # pyright: ignore[reportMissingImports]
 
 try:
-    from langchain.retrievers.multi_vector import MultiVectorRetriever
+    from langchain.retrievers.multi_vector import MultiVectorRetriever  # pyright: ignore[reportMissingImports]
 except Exception:
-    from langchain_classic.retrievers.multi_vector import MultiVectorRetriever
+    from langchain_classic.retrievers.multi_vector import MultiVectorRetriever  # pyright: ignore[reportMissingImports]
 
 from app.core.config import (
     PARENTS_PATH,

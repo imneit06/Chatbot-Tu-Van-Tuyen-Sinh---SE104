@@ -1,6 +1,6 @@
 from pathlib import Path
 import os
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # pyright: ignore[reportMissingImports]
 
 
 ROOT_DIR = Path(__file__).resolve().parents[2]
@@ -90,8 +90,9 @@ PROCESS_HTML = get_bool("PROCESS_HTML", True)
 
 
 # Chunking
-CHUNK_SIZE = get_int("CHUNK_SIZE", 700)
+CHUNK_SIZE = get_int("CHUNK_SIZE", 1200)
 CHUNK_OVERLAP = get_int("CHUNK_OVERLAP", 120)
+CHUNK_MAX_TOKENS = get_int("CHUNK_MAX_TOKENS", 512)  # ~512 tokens ≈ 700-1000 chars
 
 
 # Retrieval

@@ -1,15 +1,15 @@
 from pathlib import Path
 import json
 
-from langchain_core.documents import Document
-from langchain_core.stores import InMemoryStore
-from langchain_chroma import Chroma
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_core.documents import Document  # pyright: ignore[reportMissingImports]
+from langchain_core.stores import InMemoryStore  # pyright: ignore[reportMissingImports]
+from langchain_chroma import Chroma  # pyright: ignore[reportMissingImports]
+from langchain_huggingface import HuggingFaceEmbeddings  # pyright: ignore[reportMissingImports]
 
 try:
-    from langchain.retrievers.multi_vector import MultiVectorRetriever
+    from langchain.retrievers.multi_vector import MultiVectorRetriever  # pyright: ignore[reportMissingImports]
 except Exception:
-    from langchain_classic.retrievers.multi_vector import MultiVectorRetriever
+    from langchain_classic.retrievers.multi_vector import MultiVectorRetriever  # pyright: ignore[reportMissingImports]
 
 from app.core.config import (
     PARENTS_PATH,
@@ -112,12 +112,20 @@ def build_retriever(metadata_filter=None, k=RETRIEVAL_TOP_K):
     vectorstore = build_vectorstore()
     docstore = load_parent_docstore()
 
+    if metadata_filter:
+        filter_clause = {
+            "$and": [
+                metadata_filter,
+                {"chunk_quality": {"$nin": ["short_fragment"]}},
+            ]
+        }
+    else:
+        filter_clause = {"chunk_quality": {"$nin": ["short_fragment"]}}
+
     search_kwargs = {
         "k": k,
+        "filter": filter_clause,
     }
-
-    if metadata_filter:
-        search_kwargs["filter"] = metadata_filter
 
     return MultiVectorRetriever(
         vectorstore=vectorstore,
