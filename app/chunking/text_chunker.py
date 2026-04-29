@@ -1,4 +1,4 @@
-from langchain_core.documents import Document  # pyright: ignore[reportMissingImports]
+from langchain_core.documents import Document  
 
 from ..utils.jsonl_utils import doc_to_json
 from ..loaders.html_helpers import make_child_content_prefix

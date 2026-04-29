@@ -1,8 +1,7 @@
 from pathlib import Path
 import uuid
 import re
-from langchain_core.documents import Document # pyright: ignore[reportMissingImports]
-from langchain_text_splitters import RecursiveCharacterTextSplitter # pyright: ignore[reportMissingImports]
+from langchain_text_splitters import RecursiveCharacterTextSplitter 
 
 from app.core.config import (
     PROCESS_PDF,
@@ -16,15 +15,13 @@ from app.core.config import (
 )
 from app.core.config import PROCESSED_DIR, DOWNLOADED_IMAGES_DIR
 
-from .utils.file_utils import mkdir # pyright: ignore[reportMissingImports]
-from .utils.jsonl_utils import write_jsonl # pyright: ignore[reportMissingImports]
-from .loaders.html_loader import extract_html_text_tables_images # pyright: ignore[reportMissingImports]
-from .chunking.text_chunker import add_text_chunks # pyright: ignore[reportMissingImports]
-from .chunking.table_chunker import add_table_children # pyright: ignore[reportMissingImports]
-from .chunking.image_chunker import add_image_children # pyright: ignore[reportMissingImports]
+from app.utils.jsonl_utils import write_jsonl
+from app.loaders.html_loader import extract_html_text_tables_images
+from app.chunking.text_chunker import add_text_chunks
+from app.chunking.table_chunker import add_table_children
+from app.chunking.image_chunker import add_image_children
 
 
-ID_KEY = "doc_id"
 
 PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 DOWNLOADED_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
@@ -34,26 +31,60 @@ DOWNLOADED_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 # Parent helpers
 # =========================
 
+def clean_metadata(metadata: dict) -> dict:
+    return {
+        key: value
+        for key, value in metadata.items()
+        if value is not None and value != ""
+    }
+
+
+def guess_source_year(path: Path, text: str = ""):
+    """
+    Ưu tiên lấy năm từ tên file.
+    Nếu không có thì thử lấy từ đoạn đầu nội dung.
+    """
+    filename_matches = re.findall(r"(20\d{2})", path.name)
+
+    if filename_matches:
+        return int(filename_matches[0])
+
+    content_matches = re.findall(r"(20\d{2})", text[:2000])
+
+    if content_matches:
+        return int(content_matches[0])
+
+    return None
+
+
 def add_parent(
     parent_records,
     parent_id: str,
     content: str,
     source: str,
-    location,
+    location,   
     parent_type: str,
     file_type: str,
+    extra_metadata: dict | None = None,
 ):
     if not content.strip():
         return
+
+    metadata = {
+        "source": source,
+        "source_title": Path(source).stem,
+        "location": location,
+        "parent_type": parent_type,
+        "file_type": file_type,
+    }
+
+    if extra_metadata:
+        metadata.update(extra_metadata)
+
     parent_records.append({
         "doc_id": parent_id,
         "page_content": content,
-        "metadata": {
-            "source": source,
-            "location": location,
-            "parent_type": parent_type,
-            "file_type": file_type,
-        },
+        "metadata": clean_metadata(metadata),
     })
 
 
@@ -137,7 +168,8 @@ def split_text_into_sections(text: str, min_section_chars: int = 300):
 # =========================
 
 def process_pdfs(parent_records, child_records, splitter):
-    from .loaders.pdf_loader import extract_pdf_text_tables_images # pyright: ignore[reportMissingImports]
+
+    from app.loaders.pdf_loader import extract_pdf_text_tables_images
 
     pdf_files = list(PDF_DIR.rglob("*.pdf"))
     for pdf_path in pdf_files:
@@ -155,6 +187,11 @@ def process_pdfs(parent_records, child_records, splitter):
         for page_idx, text, tables in extract_pdf_text_tables_images(pdf_path):
             parent_id = str(uuid.uuid4())
             text = clean_text(text)
+            pdf_metadata = {
+                "doc_type": "admission",
+                "page": page_idx,
+                "source_year": guess_source_year(pdf_path, text),
+            }
 
             table_blocks = add_table_children(
                 child_records=child_records,
@@ -164,6 +201,7 @@ def process_pdfs(parent_records, child_records, splitter):
                 file_name=pdf_path.name,
                 location=page_idx,
                 file_type="pdf",
+                extra_metadata=pdf_metadata
             )
 
             parent_content = text + "\n\n" + "\n\n".join(table_blocks)
@@ -176,6 +214,7 @@ def process_pdfs(parent_records, child_records, splitter):
                 location=page_idx,
                 parent_type="pdf_page",
                 file_type="pdf",
+                extra_metadata=pdf_metadata
             )
 
             add_text_chunks(
@@ -186,6 +225,7 @@ def process_pdfs(parent_records, child_records, splitter):
                 source=str(pdf_path),
                 location=page_idx,
                 file_type="pdf",
+                extra_metadata=pdf_metadata
             )
 
 
@@ -201,6 +241,7 @@ def process_htmls(parent_records, child_records, splitter):
         text, tables, images = extract_html_text_tables_images(html_path)
 
         major_name = guess_major_name(text, str(html_path))
+        html_source_year = guess_source_year(html_path, text)
         sections = split_text_into_sections(text)
 
         print(f"[HTML] Major guess: {major_name}")
@@ -214,6 +255,13 @@ def process_htmls(parent_records, child_records, splitter):
             section_title = section["title"]
             section_content = section["content"]
             parent_content = f"[SECTION {section_idx}] {section_title}\n\n{section_content}"
+            section_metadata = {
+                "doc_type": "curriculum",
+                "major_name": major_name,
+                "section_title": section_title,
+                "section_index": section_idx,
+                "source_year": html_source_year,
+            }
 
             add_parent(
                 parent_records=parent_records,
@@ -223,6 +271,7 @@ def process_htmls(parent_records, child_records, splitter):
                 location=f"html_section_{section_idx}",
                 parent_type="html_section",
                 file_type="html",
+                extra_metadata=section_metadata
             )
             add_text_chunks(
                 child_records=child_records,
@@ -232,17 +281,18 @@ def process_htmls(parent_records, child_records, splitter):
                 source=str(html_path),
                 location=f"html_section_{section_idx}",
                 file_type="html",
-                extra_metadata={
-                    "doc_type": "curriculum",
-                    "major_name": major_name,
-                    "section_title": section_title,
-                    "section_index": section_idx,
-                },
+                extra_metadata=section_metadata
             )
 
         # 2. Mỗi bảng HTML = 1 parent riêng
         for table_idx, table in enumerate(tables, start=1):
             parent_id = str(uuid.uuid4())
+            table_metadata = {
+                "doc_type": "curriculum",
+                "major_name": major_name,
+                "table_index": table_idx,
+                "source_year": html_source_year,
+            }
             table_blocks = add_table_children(
                 child_records=child_records,
                 tables=[table],
@@ -251,6 +301,7 @@ def process_htmls(parent_records, child_records, splitter):
                 file_name=html_path.name,
                 location=f"html_table_{table_idx}",
                 file_type="html",
+                extra_metadata=table_metadata
             )
             if not table_blocks:
                 continue
@@ -266,6 +317,7 @@ def process_htmls(parent_records, child_records, splitter):
                 location=f"html_table_{table_idx}",
                 parent_type="html_table",
                 file_type="html",
+                extra_metadata=table_metadata
             )
 
         # 3. Mỗi ảnh OCR liên quan = 1 parent riêng
@@ -286,6 +338,12 @@ def process_htmls(parent_records, child_records, splitter):
                 f"[IMAGE SECTION] Hình {image_idx} trong {html_path.name}\n"
                 f"[Ngành] {major_name}\n\n" + "\n\n".join(image_blocks)
             )
+            image_metadata = {
+                "doc_type": "curriculum",
+                "major_name": major_name,
+                "image_index": image_idx,
+                "source_year": html_source_year,
+            }
             add_parent(
                 parent_records=parent_records,
                 parent_id=parent_id,
@@ -294,6 +352,7 @@ def process_htmls(parent_records, child_records, splitter):
                 location=f"html_image_{image_idx}",
                 parent_type="html_image",
                 file_type="html",
+                extra_metadata=image_metadata
             )
 
 

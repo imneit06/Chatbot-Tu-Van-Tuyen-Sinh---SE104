@@ -1,6 +1,4 @@
-from pathlib import Path
-import uuid
-from langchain_core.documents import Document  # pyright: ignore[reportMissingImports]
+from langchain_core.documents import Document  
 
 from ..utils.jsonl_utils import doc_to_json
 
@@ -67,6 +65,7 @@ def make_table_row_docs(
     table_idx: int,
     file_type: str,
     group_size: int = 5,
+    extra_metadata=None
 ):
     child_docs = []
     if not table or len(table) < 2:
@@ -78,7 +77,7 @@ def make_table_row_docs(
     for group_start in range(0, len(rows), group_size):
         group_rows = rows[group_start:group_start + group_size]
         group_content_parts = []
-        for row_idx_offset, row in enumerate(group_rows, start=group_start + 1):
+        for row in group_rows:
             cells = [clean_cell(cell) for cell in row]
             pairs = []
             for h, c in zip(header, cells):
@@ -91,24 +90,32 @@ def make_table_row_docs(
         if not group_content.strip():
             continue
 
+        row_start = group_start + 1
+        row_end = min(group_start + group_size, len(rows))
+
         page_content = (
             make_child_content_prefix(source, location, "table_row_group", file_type)
-            + f"Các dòng bảng tuyển sinh/đào tạo (dòng {group_start+1}-{min(group_start+group_size, len(rows))+1}): {group_content}"
+            + f"Các dòng bảng tuyển sinh/đào tạo (dòng {row_start}-{row_end}): {group_content}"
         )
+
+        metadata = {
+            ID_KEY: parent_id,
+            "source": source,
+            "location": location,
+            "child_type": "table_row_group",
+            "table_index": table_idx,
+            "row_start": row_start,
+            "row_end": row_end,
+            "file_type": file_type,
+        }
+
+        if extra_metadata:
+            metadata.update(extra_metadata)
 
         child_docs.append(
             Document(
                 page_content=page_content,
-                metadata={
-                    ID_KEY: parent_id,
-                    "source": source,
-                    "location": location,
-                    "child_type": "table_row_group",
-                    "table_index": table_idx,
-                    "row_start": group_start + 1,
-                    "row_end": min(group_start + group_size, len(rows)),
-                    "file_type": file_type,
-                },
+                metadata=metadata
             )
         )
 
@@ -123,6 +130,7 @@ def add_table_children(
     file_name: str,
     location,
     file_type: str,
+    extra_metadata=None,
 ):
     table_blocks = []
 
@@ -149,16 +157,21 @@ def add_table_children(
                 )
                 + summary
             )
+            summary_metadata = {
+                ID_KEY: parent_id,
+                "source": source,
+                "location": location,
+                "child_type": "table_summary",
+                "table_index": table_idx,
+                "file_type": file_type,
+            }
+
+            if extra_metadata:
+                summary_metadata.update(extra_metadata)
+
             summary_doc = Document(
                 page_content=page_content,
-                metadata={
-                    ID_KEY: parent_id,
-                    "source": source,
-                    "location": location,
-                    "child_type": "table_summary",
-                    "table_index": table_idx,
-                    "file_type": file_type,
-                },
+                metadata=summary_metadata
             )
             child_records.append(doc_to_json(summary_doc))
 
@@ -169,6 +182,7 @@ def add_table_children(
             location=location,
             table_idx=table_idx,
             file_type=file_type,
+            extra_metadata=extra_metadata
         )
         for row_doc in row_docs:
             child_records.append(doc_to_json(row_doc))

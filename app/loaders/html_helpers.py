@@ -351,3 +351,17 @@ def extract_html_images(html_path: Path, soup: BeautifulSoup):
         img_tag.decompose()
 
     return images
+
+
+def make_child_content_prefix(source, location, child_type, file_type, extra_note=""):
+    prefix = [
+        f"[Nguồn file] {source}",
+        f"[File type] {file_type}",
+        f"[Vị trí/trang] {location}",
+        f"[Loại child] {child_type}",
+    ]
+
+    if extra_note:
+        prefix.append(f"[Ghi chú] {extra_note}")
+
+    return "\n".join(prefix) + "\n\n"

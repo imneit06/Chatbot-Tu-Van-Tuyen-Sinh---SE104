@@ -1,15 +1,14 @@
-from pathlib import Path
 import json
 
-from langchain_core.documents import Document  # pyright: ignore[reportMissingImports]
-from langchain_core.stores import InMemoryStore  # pyright: ignore[reportMissingImports]
-from langchain_chroma import Chroma  # pyright: ignore[reportMissingImports]
-from langchain_huggingface import HuggingFaceEmbeddings  # pyright: ignore[reportMissingImports]
+from langchain_core.documents import Document  
+from langchain_core.stores import InMemoryStore  
+from langchain_chroma import Chroma  
+from langchain_huggingface import HuggingFaceEmbeddings  
 
 try:
-    from langchain.retrievers.multi_vector import MultiVectorRetriever  # pyright: ignore[reportMissingImports]
+    from langchain.retrievers.multi_vector import MultiVectorRetriever  
 except Exception:
-    from langchain_classic.retrievers.multi_vector import MultiVectorRetriever  # pyright: ignore[reportMissingImports]
+    from langchain_classic.retrievers.multi_vector import MultiVectorRetriever  
 
 from app.core.config import (
     PARENTS_PATH,
@@ -20,6 +19,7 @@ from app.core.config import (
     NORMALIZE_EMBEDDINGS,
     RETRIEVAL_TOP_K,
 )
+
 
 ID_KEY = "doc_id"
 
@@ -70,42 +70,108 @@ def build_vectorstore():
     )
 
 
-def route_query(question: str):
+ADMISSION_TERMS = [
+    "tuyển sinh",
+    "xét tuyển",
+    "tổ hợp",
+    "mã ngành",
+    "chỉ tiêu",
+    "điểm chuẩn",
+    "điểm trúng tuyển",
+    "học phí",
+    "phương thức",
+    "học bạ",
+    "thpt",
+    "đánh giá năng lực",
+    "đgnl",
+    "ưu tiên xét tuyển",
+]
+
+
+CURRICULUM_TERMS = [
+    "chương trình đào tạo",
+    "chương trình học",
+    "khung chương trình",
+    "môn học",
+    "học những môn",
+    "học môn gì",
+    "bao nhiêu tín chỉ",
+    "tín chỉ",
+    "chuẩn đầu ra",
+    "cơ hội việc làm",
+    "vị trí việc làm",
+    "thực tập",
+    "đồ án",
+]
+
+
+def has_any_term(text: str, terms: list[str]) -> bool:
+    text = text.lower()
+    return any(term in text for term in terms)
+
+
+def build_intent_query(question: str, doc_type: str | None) -> str:
+    if doc_type == "admission":
+        return (
+            question
+            + "\nTập trung tìm thông tin tuyển sinh: mã ngành, tổ hợp xét tuyển, "
+              "phương thức xét tuyển, chỉ tiêu, học phí, điểm chuẩn, mã tổ hợp như A00 A01 D01."
+        )
+
+    if doc_type == "curriculum":
+        return (
+            question
+            + "\nTập trung tìm thông tin chương trình đào tạo: môn học, khung chương trình, "
+              "tín chỉ, môn bắt buộc, môn tự chọn, chuẩn đầu ra."
+        )
+
+    return question
+
+
+def plan_queries(question: str):
+    """
+    Phân tích câu hỏi để quyết định cần retrieve ở loại tài liệu nào.
+    Bản đầu tiên này chưa tách câu hỏi thành nhiều câu nhỏ,
+    nhưng đã cho phép một câu hỏi lấy cả admission và curriculum.
+    """
     q = question.lower()
 
-    curriculum_keywords = [
-        "chương trình đào tạo",
-        "khung chương trình",
-        "môn học",
-        "tín chỉ",
-        "cơ sở ngành",
-        "chuyên ngành",
-        "chuẩn đầu ra",
-        "mục tiêu đào tạo",
-        "tốt nghiệp",
-        "thực tập",
-        "đồ án",
-    ]
+    has_admission = has_any_term(q, ADMISSION_TERMS)
+    has_curriculum = has_any_term(q, CURRICULUM_TERMS)
 
-    admission_keywords = [
-        "điểm chuẩn",
-        "chỉ tiêu",
-        "xét tuyển",
-        "tổ hợp",
-        "phương thức",
-        "học bạ",
-        "thpt",
-        "đề án tuyển sinh",
-        "đăng ký",
-    ]
+    plans = []
 
-    if any(k in q for k in curriculum_keywords):
-        return {"file_type": "html"}
+    if has_admission:
+        plans.append({
+            "query": build_intent_query(question, "admission"),
+            "doc_type": "admission",
+            "intent": "admission",
+        })
 
-    if any(k in q for k in admission_keywords):
-        return {"file_type": "pdf"}
+    if has_curriculum:
+        plans.append({
+            "query": build_intent_query(question, "curriculum"),
+            "doc_type": "curriculum",
+            "intent": "curriculum",
+        })
 
-    return None
+    if not plans:
+        plans.append({
+            "query": question,
+            "doc_type": None,
+            "intent": "general",
+        })
+
+    return plans
+
+
+def metadata_filter_from_plan(plan: dict):
+    doc_type = plan.get("doc_type")
+
+    if not doc_type:
+        return None
+
+    return {"doc_type": doc_type}
 
 
 def build_retriever(metadata_filter=None, k=RETRIEVAL_TOP_K):
@@ -134,35 +200,150 @@ def build_retriever(metadata_filter=None, k=RETRIEVAL_TOP_K):
         search_kwargs=search_kwargs,
     )
 
+# check duplicate document
+def _doc_dedup_key(doc):
+    meta = doc.metadata or {}
 
-def retrieve_docs(question: str, k=RETRIEVAL_TOP_K):
-    metadata_filter = route_query(question)
-
-    retriever = build_retriever(
-        metadata_filter=metadata_filter,
-        k=k,
+    return (
+        meta.get("source"),
+        meta.get("location"),
+        meta.get("parent_type"),
+        meta.get("page"),
+        meta.get("section_index"),
+        meta.get("table_index"),
+        meta.get("image_index"),
+        doc.page_content[:200],
     )
 
-    docs = retriever.invoke(question)
 
-    return docs, metadata_filter
+def deduplicate_docs(docs):
+    seen = set()
+    unique_docs = []
+
+    for doc in docs:
+        key = _doc_dedup_key(doc)
+
+        if key in seen:
+            continue
+
+        seen.add(key)
+        unique_docs.append(doc)
+
+    return unique_docs
+
+
+def merge_doc_groups_round_robin(doc_groups):
+    merged_docs = []
+    seen = set()
+
+    if not doc_groups:
+        return merged_docs
+
+    max_len = max(len(group) for group in doc_groups)
+
+    for idx in range(max_len):
+        for group in doc_groups:
+            if idx >= len(group):
+                continue
+
+            doc = group[idx]
+            key = _doc_dedup_key(doc)
+
+            if key in seen:
+                continue
+
+            seen.add(key)
+            merged_docs.append(doc)
+
+    return merged_docs
+
+
+def retrieve_docs(question: str, k: int = RETRIEVAL_TOP_K):
+    plans = plan_queries(question)
+
+    candidate_k = max(k * 2, 10)
+    doc_groups = []
+
+    for plan in plans:
+        plan_filter = metadata_filter_from_plan(plan)
+
+        retriever = build_retriever(
+            metadata_filter=plan_filter,
+            k=candidate_k,
+        )
+
+        docs = retriever.invoke(plan["query"])
+        doc_groups.append(docs)
+
+    broad_retriever = build_retriever(
+        metadata_filter=None,
+        k=candidate_k,
+    )
+    broad_docs = broad_retriever.invoke(question)
+    doc_groups.append(broad_docs)
+
+    merged_docs = merge_doc_groups_round_robin(doc_groups)
+
+    return merged_docs[:k], {
+        "plans": plans,
+    }
+
+
+def _clean_meta_value(value):
+    if value is None:
+        return None
+    if value == "":
+        return None
+    return value
+
+
+def _format_meta_line(label: str, value):
+    value = _clean_meta_value(value)
+    if value is None:
+        return None
+    return f"{label}: {value}"
 
 
 def format_context(docs):
     blocks = []
 
     for i, doc in enumerate(docs, start=1):
-        meta = doc.metadata
+        meta = doc.metadata or {}
 
         source = meta.get("source", "unknown")
-        location = meta.get("location", "unknown")
-        parent_type = meta.get("parent_type", "unknown")
+        source_title = meta.get("source_title")
+        location = meta.get("location")
+        parent_type = meta.get("parent_type")
+        file_type = meta.get("file_type")
+        doc_type = meta.get("doc_type")
+        source_year = meta.get("source_year")
+        page = meta.get("page")
+        major_name = meta.get("major_name")
+        section_title = meta.get("section_title")
+        section_index = meta.get("section_index")
+        table_index = meta.get("table_index")
+        image_index = meta.get("image_index")
 
-        block = f"""
-[DOCUMENT {i}]
-Nguồn: {source}
-Vị trí: {location}
-Loại: {parent_type}
+        meta_lines = [
+            _format_meta_line("Nguồn file", source),
+            _format_meta_line("Tên nguồn", source_title),
+            _format_meta_line("Loại file", file_type),
+            _format_meta_line("Loại tài liệu", doc_type),
+            _format_meta_line("Năm nguồn", source_year),
+            _format_meta_line("Trang", page),
+            _format_meta_line("Vị trí", location),
+            _format_meta_line("Loại parent", parent_type),
+            _format_meta_line("Ngành", major_name),
+            _format_meta_line("Mục", section_title),
+            _format_meta_line("Section index", section_index),
+            _format_meta_line("Table index", table_index),
+            _format_meta_line("Image index", image_index),
+        ]
+
+        meta_text = "\n".join(line for line in meta_lines if line)
+
+        block = f"""[DOCUMENT {i}]
+{meta_text}
 
 Nội dung:
 {doc.page_content}
@@ -175,15 +356,25 @@ Nội dung:
 def format_sources(docs):
     sources = []
 
-    for doc in docs:
-        meta = doc.metadata
+    for i, doc in enumerate(docs, start=1):
+        meta = doc.metadata or {}
 
-        sources.append(
-            {
-                "source": meta.get("source"),
-                "location": meta.get("location"),
-                "parent_type": meta.get("parent_type"),
-            }
-        )
+        sources.append({
+            "document": i,
+            "source": meta.get("source"),
+            "source_title": meta.get("source_title"),
+            "file_type": meta.get("file_type"),
+            "doc_type": meta.get("doc_type"),
+            "source_year": meta.get("source_year"),
+            "page": meta.get("page"),
+            "location": meta.get("location"),
+            "parent_type": meta.get("parent_type"),
+            "major_name": meta.get("major_name"),
+            "section_title": meta.get("section_title"),
+            "section_index": meta.get("section_index"),
+            "table_index": meta.get("table_index"),
+            "image_index": meta.get("image_index"),
+            "preview": doc.page_content[:300].replace("\n", " "),
+        })
 
     return sources
