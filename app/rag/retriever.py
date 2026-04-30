@@ -22,6 +22,33 @@ from app.core.config import (
 
 from app.search.bm25_index import get_bm25_indexer
 
+# Module-level singletons
+_embeddings = None
+_vectorstore = None
+_docstore = None
+
+
+def get_embeddings():
+    global _embeddings
+    if _embeddings is None:
+        _embeddings = build_embeddings()
+    return _embeddings
+
+
+def get_vectorstore():
+    global _vectorstore
+    if _vectorstore is None:
+        _vectorstore = build_vectorstore()
+    return _vectorstore
+
+
+def get_docstore():
+    global _docstore
+    if _docstore is None:
+        _docstore = load_parent_docstore()
+    return _docstore
+
+
 ID_KEY = "doc_id"
 
 
@@ -63,7 +90,7 @@ def build_embeddings():
 def build_vectorstore():
     return Chroma(
         collection_name=CHROMA_COLLECTION_NAME,
-        embedding_function=build_embeddings(),
+        embedding_function=get_embeddings(),
         persist_directory=str(CHROMA_DIR),
         collection_metadata={
             "hnsw:space": "cosine",
@@ -176,8 +203,8 @@ def metadata_filter_from_plan(plan: dict):
 
 
 def build_retriever(metadata_filter=None, k=RETRIEVAL_TOP_K):
-    vectorstore = build_vectorstore()
-    docstore = load_parent_docstore()
+    vectorstore = get_vectorstore()
+    docstore = get_docstore()
 
     if metadata_filter:
         filter_clause = {
@@ -310,7 +337,7 @@ def retrieve_docs(question: str, k: int = RETRIEVAL_TOP_K):
 
         # BM25 keyword search
         bm25_raw = retrieve_with_bm25(plan["query"], k=candidate_k)
-        docstore = load_parent_docstore()
+        docstore = get_docstore()
         bm25_docs = []
         for doc_id in bm25_raw:
             doc = docstore.mget([doc_id])
@@ -324,7 +351,7 @@ def retrieve_docs(question: str, k: int = RETRIEVAL_TOP_K):
     # Broad retrieval (no doc_type filter)
     chroma_broad = build_retriever(metadata_filter=None, k=candidate_k).invoke(question)
     bm25_broad_raw = retrieve_with_bm25(question, k=candidate_k)
-    docstore = load_parent_docstore()
+    docstore = get_docstore()
     bm25_broad_docs = []
     for doc_id in bm25_broad_raw:
         doc = docstore.mget([doc_id])
